@@ -36,7 +36,7 @@
 | 执行时间 | 开始/结束时间精确到分钟，独立标注时区与时间依据 |
 | 模型 | 名称、路径、revision、dtype、量化方式 |
 | 机器 | 机器别名、NPU 型号/卡数、操作系统、驱动/固件等已知信息 |
-| 环境 | 镜像 tag/digest，vLLM、vLLM-Ascend、Triton、CANN、torch、torch_npu、Python 版本或 commit |
+| 环境 | 镜像 tag/digest，vLLM、vLLM-Ascend、Triton、CANN、torch、torch_npu、Python，以及使用的 AISBench 和 aisbench_auto_tools_prefix 的独立版本或 commit |
 | 部署 | 实际命令、环境变量、拓扑、TP/DP/PP/EP、图模式、上下文长度、调度和 KV cache 等核心参数 |
 | 压测 | 工具、命令、数据集、输入/输出长度、请求数、并发/QPS、预热、每轮指标及失败请求 |
 | 精度评测 | 数据集/版本/split、prompt/few-shot、生成与评分配置、各子任务分数、样本计数和失败样本证据 |
@@ -52,6 +52,8 @@
 压测、精度评测和测试都必须保留实际命令、输入/配置、详细结果和报告证据，不能只留“通过”、总分或单个吞吐数字。多轮测量、各数据集/子任务、各用例的已有结果都保留，包括失败轮次；大型逐用例结果可以通过原始报告保存。具体字段见 [验证明细约定](references/validation-details.md)。
 
 将可获得的脱敏配置、汇总报告和日志保存到实验 `evidence/`，记录路径与 SHA256。大体积逐请求/逐样本输出可外部引用，但本次实验的详细汇总结果要落在实验目录。只有部分材料时照常归档，列出缺失项，并将 `details_status` 标为 `partial`；运行是否通过和记录是否完整分别表示。不会为了补齐材料自动重跑。
+
+使用 AISBench 或 `aisbench_auto_tools_prefix` 时，也请提供当时实际使用的各自版本号/commit、dirty 状态、工具路径和评测所在机器/容器等已知信息。它们分别保存为 `environment.versions.aisbench` 与 `environment.versions.aisbench_auto_tools_prefix`，不以服务端版本替代客户端版本。没有版本元数据的脚本可用内容 SHA256 标识；仅有目录名不足以确认版本。缺失信息会单列，不会猜测，多轮版本变化也会分别记录。
 
 ## 文件在哪里
 

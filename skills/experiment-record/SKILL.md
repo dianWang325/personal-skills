@@ -22,6 +22,8 @@ description: 根据用户提供的实验日志和机器环境信息，在 D:\exp
 
 只要实验涉及任意一种验证，必须阅读 [验证明细约定](references/validation-details.md)，将可获得的完整明细分别保存到 `benchmark`、`accuracy`、`tests`，不能只写总分、吞吐数字或“通过”。实际执行命令、工具/代码版本、输入与配置、每轮/每任务/每用例结果、失败情况和结果证据均需保存；用户提供的结果表不得只摘选最好值。
 
+使用 AISBench 时必须记录 `environment.versions.aisbench`；使用 `aisbench_auto_tools_prefix` 时必须独立记录 `environment.versions.aisbench_auto_tools_prefix`，不能用 AISBench 的版本代替辅助工具版本。保存运行当时的版本号、commit、dirty 状态及证据（已知项），并注明实际执行所在机器/容器/路径。仅知道路径或前缀不代表知道版本；无版本号/commit 的脚本可记录内容 SHA256。版本无法确认时保留 null 并列入缺失信息；明确未使用时注明不适用。多轮使用不同版本时在对应 run 中分别记录。
+
 将对应日志、配置和机器可读结果报告的脱敏副本放入实验的 `evidence/`，在 `artifacts` 中登记路径及 SHA256。大体积逐请求输出可以外部引用，但详细汇总结果必须保存在本次实验目录，不能只留可能失效的远端路径。只有截图或聊天输出时保留可用证据并注明范围，不声称已取得完整报告。
 
 每类验证用 `performed`（true/false/null）区分已执行、明确未执行和未知，用 `details_status`（complete/partial/unknown/not_applicable）单独表示记录完整度。发生过验证但命令、配置、结果或证据缺失时设为 partial，并在 `missing_information` 逐项说明，不得标为完整。验证运行失败也可以拥有完整记录；反之，运行成功不代表记录完整。无需因缺失而阻塞已有内容归档，不为补齐记录自动重跑实验。

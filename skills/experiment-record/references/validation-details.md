@@ -13,6 +13,14 @@ benchmark / accuracy / tests 对象各自包含：
 - `runs`：逐轮记录 run_id、起止时间/时区（已知时）、运行状态、退出码、指标/结果、失败/错误和 artifact_refs。多轮结果分别保留，汇总需说明方法，不能覆盖失败轮次或仅选最好一轮。
 - `artifact_refs`：指向 artifacts 中的本地相对路径，或明确标注的外部引用。artifacts 保存 SHA256、是否脱敏及说明。
 
+## AISBench 与辅助工具版本
+
+凡使用 AISBench（如日志中的 ais_bench），在 `environment.versions.aisbench` 保存版本信息；凡使用 `aisbench_auto_tools_prefix`，在 `environment.versions.aisbench_auto_tools_prefix` 单独保存对应工具版本。两者分别追溯，不因工具名称相近或共用环境而合并。
+
+有证据的版本可保存为对象：`version`、`commit`、`dirty`、`source`、`path`、`sha256`、`runtime`，未知子字段为 null。source 为版本证据来源；runtime 标明实际评测进程所在的机器/容器/解释器。不要把推理服务容器的包版本当作客户端评测工具版本。对于没有包版本或 Git 元数据的脚本，保存实际入口脚本或工具包清单及内容 SHA256，以标识使用的内容；不能只记录目录名或命令前缀。
+
+多轮工具版本不同时在各 `runs[].tool_versions` 内保存同名键及其版本对象，顶层注明适用范围。版本无法确认时在 missing_information 中逐项注明；影响验证复现的工具版本缺失时 details_status 为 partial。明确未使用的工具在记录中注明不适用，不要求安装、自动远端采集或重跑。
+
 ## 压测 benchmark
 
 保存 workload：数据集名称/版本、筛选/抽样规则、请求数、实际成功/失败请求数、输入/输出 token 长度或分布、并发、请求率/QPS（含无限请求率）、seed、流式配置、超时/重试；保存 warmup、轮数和持续时间。

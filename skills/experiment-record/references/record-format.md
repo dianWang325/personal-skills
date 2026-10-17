@@ -9,6 +9,7 @@
 | status | unknown / success / failed / interrupted / partial；success 指记录所描述的实验任务完成，不能只看服务启动 |
 | model | name、path、revision、dtype、quantization；路径和模型名分别保存 |
 | environment | machines（别名、NPU 型号/卡数、驱动/固件、操作系统）、container（镜像 tag 和 digest）、versions（vllm、vllm_ascend、triton、cann、torch、torch_npu、python）；版本对象包含 version、commit、dirty 等已知事实，未知为 null |
+| environment.versions.aisbench / aisbench_auto_tools_prefix | 独立保存评测工具与辅助工具的运行时版本号、commit、dirty、实际路径/运行环境和版本证据；没有版本元数据时可用内容 SHA256 标识。使用但未知时明确列入缺失项，不能以路径名或另一个工具版本替代 |
 | deployment | topology、commands、environment_variables、core_config；TP/DP/PP/EP、PD、图模式、max_model_len、max_num_seqs、max_num_batched_tokens、KV cache dtype、显存利用率、量化、投机解码等按实际保存，不预设默认值 |
 | benchmark | tool/version、commands、workload、warmup、runs；workload 保留数据集、请求数、输入/输出 token、并发、请求率、seed；每个 run 保存成功/失败数、持续时间和 metrics |
 | accuracy | 精度评测工具、命令、datasets、evaluation_config、逐轮/逐数据集/子任务结果与原始报告引用 |

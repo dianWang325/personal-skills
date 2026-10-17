@@ -14,7 +14,7 @@ def template():
         "status": "unknown",
         "model": {"name": None, "path": None, "revision": None, "dtype": None, "quantization": None},
         "environment": {"machines": [], "container": {"image": None, "digest": None},
-                        "versions": {k: None for k in ["vllm", "vllm_ascend", "triton", "cann", "torch", "torch_npu", "python"]}},
+                        "versions": {k: None for k in ["vllm", "vllm_ascend", "triton", "cann", "torch", "torch_npu", "python", "aisbench", "aisbench_auto_tools_prefix"]}},
         "deployment": {"topology": None, "commands": [], "environment_variables": {}, "core_config": {}},
         "benchmark": {"performed": None, "details_status": "unknown", "tool": None, "commands": [],
                       "workload": {}, "warmup": None, "runs": [], "artifact_refs": []},
