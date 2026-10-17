@@ -20,8 +20,9 @@
 | pitfalls | 可选数组；每项记录现象、触发条件、影响、尝试/处理、验证结果和根因可信度，不把猜测写为定论 |
 | evidence | 每项包含 field、source、lines 或 excerpt、kind（log/user_statement/manifest）；来源冲突保留双方及待确认项 |
 | artifacts | path 或 external_path、sha256、kind、redacted、note；优先实验目录相对路径，摘要使用相对链接；未复制日志标明 external_path |
-| deployment / benchmark / accuracy / tests 的 script_refs | 指向 artifacts 中归档脚本的相对路径；不同轮次使用不同快照时在 runs[].script_refs 中关联。已提供的服务拉起/压测/评测/测试脚本必须脱敏保存实际内容，不只保留命令或源路径 |
-| missing_information | 缺失或冲突信息；可记录后续补采命令建议，但不能自动执行实验或远端命令 |
+| artifacts 的远端采集信息 | source 中保存 host/port/user/container/path（已知项），retrieved_at 含时区；sha256 为本地归档字节哈希，可另存 source_sha256 及校验结果。默认原样保存、redacted=false；区分完整文件与摘录，采集时快照不自动等于运行时版本 |
+| deployment / benchmark / accuracy / tests 的 script_refs | 指向 artifacts 中归档脚本的相对路径；不同轮次使用不同快照时在 runs[].script_refs 中关联。已提供的服务拉起/压测/评测/测试脚本必须原样保存实际内容，不只保留命令或源路径 |
+| missing_information | 缺失或冲突信息；可只读查询相关远端文件/版本并记录补采建议，不能自动执行实验或修改环境 |
 | related_records / tags | 关联实验 id、便于查找的标签 |
 
 `id`、`created_at` 和 `schema_version` 由脚本填写。目录直接位于实验仓库根目录，命名为 `YYYYMMDDHHMM_模型名`；重名加 `_02`、`_03`。模型名称优先取 model.name，再取 model.path 的最后一段，未知用 unknown-model。不要填写虚构的实验作为初始化数据。无开始时间时目录使用 `undated_<归档日期时间>_<模型名>`，索引日期显示“未知”，未来补齐时间无需重命名目录或更改 id。
@@ -30,4 +31,4 @@
 
 涉及压测、精度评测或测试时，必须遵循 [验证明细约定](validation-details.md)，保存相应完整配置、执行细节、详细结果和证据。三类对象均使用 performed、details_status 和 artifact_refs。新模板包含 accuracy/tests，历史 schema v1 未含这些字段仍可读取，不自动补造历史结果。脚本检查字段类型、完整度状态的一致性与 complete 的基本材料引用；材料真实性和内容完整度须由 Codex 核对。
 
-脚本 artifacts 增加 source（原路径/消息）、execution_match（confirmed/unverified/mismatch，需运行证据才能标 confirmed）。sha256 针对保存的脱敏副本，不冒称原始文件哈希；如另有可信原文件哈希可单独记 source_sha256。注明脱敏、片段和缺少依赖等限制；同名不同内容分别保存，不覆盖历史快照。新增 script_refs 为兼容性扩展，旧记录未包含时仍可读取。
+脚本 artifacts 增加 source（原路径/消息）、execution_match（confirmed/unverified/mismatch，需运行证据才能标 confirmed）。sha256 针对保存的归档副本，不冒称原始文件哈希；如另有可信原文件哈希可单独记 source_sha256。注明是否改写、片段和缺少依赖等限制；同名不同内容分别保存，不覆盖历史快照。新增 script_refs 为兼容性扩展，旧记录未包含时仍可读取。

@@ -11,7 +11,7 @@
 | observed_status | enabled / disabled / fallback / mixed / unknown，均仅指 scope 中有证据覆盖的范围 |
 | scope | 运行轮次、日志覆盖时段、阶段、rank/worker、请求/批次/shape 等适用范围及未覆盖部分；未知明确注明 |
 | events | 按证据顺序保存初始化、生效、禁用、回退和恢复事件；每项含 timestamp（已知时）、phase、scope、event、reason、fallback_to、evidence_refs |
-| evidence_refs | 实际状态对应的证据引用，例如 evidence 中的字段路径/ID、脱敏日志路径与行号或原文片段 |
+| evidence_refs | 实际状态对应的证据引用，例如 evidence 中的字段路径/ID、原始日志路径与行号或原文片段 |
 | run_refs | benchmark/accuracy/tests 的对应 run_id；无法关联具体轮次时留空并记录限制 |
 | impact | 对实验目的、测量范围、指标解释的影响与限制，不猜测回退造成的性能损失比例 |
 
@@ -25,7 +25,7 @@
 
 日志中可搜索 fallback、fall back、disable、unsupported、not supported、条件不满足、回退及特性名称，但关键词只用于定位；必须阅读上下文，区分能力提示、条件分支说明与本次真正执行的回退。其他重试/进程的消息不能错配到本轮；无法确定来源则保留歧义。
 
-日志只有局部片段、缺少部分 rank 或测量时段时，明确覆盖范围和缺失项。不自动探测远端或重跑实验来确认。
+日志只有局部片段、缺少部分 rank 或测量时段时，明确覆盖范围和缺失项。允许只读补读相关远端日志，但不能自动重跑实验来确认。
 
 ## 结果与复盘
 
