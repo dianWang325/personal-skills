@@ -4,7 +4,7 @@ from datetime import datetime
 import json
 from pathlib import Path
 import re
-import uuid
+from urllib.parse import quote
 
 
 def template():
@@ -115,13 +115,24 @@ def render(data):
 
 def load_records(root):
     records = []
-    for path in sorted((root / "experiments").glob("*/*/*/record.json")):
+    # Read the former layout too, without silently moving existing archives.
+    paths = set(root.glob("*/record.json")) | set((root / "experiments").glob("*/*/*/record.json"))
+    for path in sorted(paths):
         data = json.loads(path.read_text(encoding="utf-8-sig"))
         validate(data)
         if data.get("id") != path.parent.name:
             raise ValueError(f"id does not match directory: {path}")
         records.append((path, data))
     return records
+
+
+def model_directory_name(data, override=None):
+    value = override or data["model"].get("name") or data["model"].get("path") or "unknown-model"
+    # Model IDs and paths commonly include a namespace: use their final component.
+    value = str(value).strip().replace("\\", "/").rstrip("/").split("/")[-1]
+    value = re.sub(r'[<>:"/\\|?*\x00-\x1f\x7f]', "-", value)
+    value = re.sub(r"\s+", "-", value).strip(" .-")[:80].rstrip(" .")
+    return value or "unknown-model"
 
 
 def cell(value):
@@ -134,7 +145,7 @@ def rebuild(root):
              "| 执行时间 | 时区 | 实验 | 模型 | 状态 | 结果 |", "|---|---|---|---|---|---|"]
     for path, data in sorted(records, key=lambda item: (item[1]["execution"].get("started_at") or "", item[1]["id"]), reverse=True):
         write(path.parent / "README.md", render(data))
-        relative = (path.parent / "README.md").relative_to(root).as_posix()
+        relative = quote((path.parent / "README.md").relative_to(root).as_posix(), safe="/")
         values = [cell(data["execution"].get("started_at")), cell(data["execution"].get("timezone")),
                   f"[{cell(data['title'])}]({relative})", cell(data["model"].get("name")),
                   cell(data["status"]), cell(data["outcome"].get("summary"))]
@@ -151,7 +162,7 @@ def main():
     p.add_argument("--output", type=Path, required=True)
     p = sub.add_parser("add")
     p.add_argument("--input", type=Path, required=True)
-    p.add_argument("--slug", required=True)
+    p.add_argument("--model-name", "--slug", dest="model_name", help="Optional short model name for the folder")
     sub.add_parser("rebuild")
     p = sub.add_parser("list")
     p.add_argument("--from", dest="start")
@@ -163,18 +174,24 @@ def main():
             raise ValueError("template output already exists")
         write(args.output, json.dumps(template(), ensure_ascii=False, indent=2) + "\n")
     elif args.command == "add":
-        if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", args.slug) or len(args.slug) > 64:
-            raise ValueError("slug must be lowercase ASCII, hyphen-separated, at most 64 characters")
         data = json.loads(args.input.read_text(encoding="utf-8-sig"))
         validate(data)
         load_records(root)
         now = datetime.now().astimezone()
         started = data["execution"].get("started_at")
         date = datetime.strptime(started, "%Y-%m-%d %H:%M") if started else now
-        prefix = date.strftime("%Y%m%d-%H%M") if started else "undated-" + date.strftime("%Y%m%d-%H%M")
-        record_id = f"{prefix}-{args.slug}-{uuid.uuid4().hex[:8]}"
-        folder = root / "experiments" / date.strftime("%Y") / date.strftime("%m") / record_id
-        folder.mkdir(parents=True, exist_ok=False)
+        prefix = date.strftime("%Y%m%d%H%M") if started else "undated_" + date.strftime("%Y%m%d%H%M")
+        base = f"{prefix}_{model_directory_name(data, args.model_name)}"
+        root.mkdir(parents=True, exist_ok=True)
+        number = 1
+        while True:
+            record_id = base if number == 1 else f"{base}_{number:02d}"
+            folder = root / record_id
+            try:
+                folder.mkdir(exist_ok=False)
+                break
+            except FileExistsError:
+                number += 1
         data.update(id=record_id, created_at=now.isoformat(timespec="minutes"))
         write(folder / "record.json", json.dumps(data, ensure_ascii=False, indent=2) + "\n")
         (folder / "evidence").mkdir()

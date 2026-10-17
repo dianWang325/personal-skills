@@ -52,7 +52,7 @@ D:\experiment\
 ├── README.md
 ├── AGENTS.md
 ├── INDEX.md                         实验总索引
-├── experiments\YYYY\MM\<id>\
+├── YYYYMMDDHHMM_模型名\
 │   ├── record.json                  结构化事实来源
 │   ├── README.md                    从 JSON 生成的实验摘要
 │   └── evidence\                   脱敏日志或摘录
@@ -60,9 +60,11 @@ D:\experiment\
     └── YYYY-MM-DD-主题.md           按需生成的复盘
 ```
 
-时间未知的实验 ID 带 `undated-` 前缀，目录按归档年月放置；索引仍显示执行时间未知。补齐执行时间后保持 ID 和目录稳定。
+实验目录直接放在仓库根目录，例如 `202610172030_Qwen3-32B/`，不按年月建立额外层级。时间取实验开始时间，模型名取名称或路径的最后一段，也可用 `--model-name` 指定简短名称。非法路径字符替换为短横线、空白替换为短横线，模型名最多保留 80 字符；原始模型标识完整保存在 JSON 中。
 
-同一配置的多轮测量可以归为一条记录；模型、代码、拓扑或关键配置变化时拆分并关联。UUID 后缀防止目录重名，但语义去重由 Codex 阅读日志和既有记录完成，脚本不会自动判断两份日志是否来自同一次运行。
+时间未知的实验 ID 使用 `undated_归档时间_模型名`；索引仍显示执行时间未知。模型未知使用 `unknown-model`。补齐信息后保持 ID 和目录稳定。
+
+同一配置的多轮测量可以归为一条记录；模型、代码、拓扑或关键配置变化时拆分并关联。同一分钟同模型发生重名时追加 `_02`、`_03` 等序号，避免覆盖，但语义去重由 Codex 阅读日志和既有记录完成，脚本不会自动判断两份日志是否来自同一次运行。
 
 ## 补充、检索与复盘
 
@@ -102,7 +104,7 @@ $recordScript = "$env:USERPROFILE\.codex\skills\experiment-record\scripts\record
 python $recordScript template --output 'D:\experiment\draft.json'
 
 # 填写 draft.json 后归档；title 必填，其他字段遵循骨架类型。
-python $recordScript --root 'D:\experiment' add --input 'D:\experiment\draft.json' --slug 'qwen-tp8'
+python $recordScript --root 'D:\experiment' add --input 'D:\experiment\draft.json'
 
 # 修改已归档 record.json 后，重新生成所有实验摘要和总索引。
 python $recordScript --root 'D:\experiment' rebuild

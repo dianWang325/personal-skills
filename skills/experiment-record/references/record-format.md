@@ -19,6 +19,6 @@
 | missing_information | 缺失或冲突信息；可记录后续补采命令建议，但不能自动执行实验或远端命令 |
 | related_records / tags | 关联实验 id、便于查找的标签 |
 
-`id`、`created_at` 和 `schema_version` 由脚本填写。不要填写虚构的实验作为初始化数据。无开始时间时目录使用 `undated-<归档日期时间>-<slug>`，索引日期显示“未知”，未来补齐时间无需重命名目录或更改 id。
+`id`、`created_at` 和 `schema_version` 由脚本填写。目录直接位于实验仓库根目录，命名为 `YYYYMMDDHHMM_模型名`；重名加 `_02`、`_03`。模型名称优先取 model.name，再取 model.path 的最后一段，未知用 unknown-model。不要填写虚构的实验作为初始化数据。无开始时间时目录使用 `undated_<归档日期时间>_<模型名>`，索引日期显示“未知”，未来补齐时间无需重命名目录或更改 id。
 
 没有用户日志时仅初始化空仓库。记录可不完整，但需要可追溯。粘贴的日志标注用户提供，行号只针对确实保留的文本，不编造原文件行号。模型 revision、镜像 digest、commit、dirty 状态缺失会限制复现能力，应诚实列出。
