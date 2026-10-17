@@ -10,6 +10,7 @@ benchmark / accuracy / tests 对象各自包含：
 - `details_status`：complete（命令、配置、详细结果和证据都已归档）、partial（已执行但材料不全）、unknown（未知是否执行）、not_applicable（明确未执行）。complete 不表示验证通过。
 - `tool`：工具名称、版本或 commit；补丁/dirty 状态如已知也保存。
 - `commands`：完整命令，包括参数、启动环境变量和配置文件位置；配置文件内容或脱敏副本必须保留，不只保存路径。
+- `script_refs`：已提供的压测/精度评测/测试脚本必须脱敏保存到实验 evidence/，通过 artifacts 登记来源、归档副本 SHA256 与是否匹配实际执行版本；在本字段及需要时各 runs[].script_refs 关联。服务拉起脚本使用 deployment.script_refs。仅有脚本不能证明执行结果，按日志核对；同名不同内容分别留存，配置与依赖缺失明确列出。
 - `runs`：逐轮记录 run_id、起止时间/时区（已知时）、运行状态、退出码、指标/结果、失败/错误和 artifact_refs。多轮结果分别保留，汇总需说明方法，不能覆盖失败轮次或仅选最好一轮。
 - 特性配置可能回退时，按 [特性记录约定](runtime-features.md) 将实际生效状态/回退事件与 run_id 关联；混合路径测得的整轮指标不能归为特性全程生效的结果。日志覆盖不足时明确标为未确认。
 - `artifact_refs`：指向 artifacts 中的本地相对路径，或明确标注的外部引用。artifacts 保存 SHA256、是否脱敏及说明。

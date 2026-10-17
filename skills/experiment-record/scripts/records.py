@@ -15,15 +15,15 @@ def template():
         "model": {"name": None, "path": None, "revision": None, "dtype": None, "quantization": None},
         "environment": {"machines": [], "container": {"image": None, "digest": None},
                         "versions": {k: None for k in ["vllm", "vllm_ascend", "triton", "cann", "torch", "torch_npu", "python", "aisbench", "aisbench_auto_tools_prefix"]}},
-        "deployment": {"topology": None, "commands": [], "environment_variables": {}, "core_config": {}},
+        "deployment": {"topology": None, "commands": [], "environment_variables": {}, "core_config": {}, "script_refs": []},
         "runtime_features": [],
         "benchmark": {"performed": None, "details_status": "unknown", "tool": None, "commands": [],
-                      "workload": {}, "warmup": None, "runs": [], "artifact_refs": []},
+                      "workload": {}, "warmup": None, "runs": [], "artifact_refs": [], "script_refs": []},
         "accuracy": {"performed": None, "details_status": "unknown", "tool": None, "commands": [],
-                     "datasets": [], "evaluation_config": {}, "runs": [], "artifact_refs": []},
+                     "datasets": [], "evaluation_config": {}, "runs": [], "artifact_refs": [], "script_refs": []},
         "tests": {"performed": None, "details_status": "unknown", "tool": None, "commands": [],
                   "test_type": None, "selection": [], "case_matrix": [], "criteria": {},
-                  "runs": [], "artifact_refs": []},
+                  "runs": [], "artifact_refs": [], "script_refs": []},
         "outcome": {"summary": None, "conclusions": [], "limitations": []},
         "pitfalls": [], "evidence": [], "artifacts": [], "missing_information": [],
         "related_records": [], "tags": []}
@@ -49,6 +49,8 @@ def validate(data):
     for key in ("evidence", "artifacts", "missing_information", "pitfalls", "related_records", "tags"):
         if not isinstance(data.get(key), list):
             raise ValueError(f"{key} must be an array")
+    if "script_refs" in data["deployment"] and not isinstance(data["deployment"]["script_refs"], list):
+        raise ValueError("deployment.script_refs must be an array")
     features = data.get("runtime_features", [])
     if not isinstance(features, list):
         raise ValueError("runtime_features must be an array")
@@ -73,7 +75,7 @@ def validate(data):
         state = section.get("details_status")
         if state is not None and state not in {"complete", "partial", "unknown", "not_applicable"}:
             raise ValueError(f"invalid {key}.details_status")
-        for field in ("commands", "runs", "artifact_refs"):
+        for field in ("commands", "runs", "artifact_refs", "script_refs"):
             if field in section and not isinstance(section[field], list):
                 raise ValueError(f"{key}.{field} must be an array")
         if state in {"complete", "partial"} and section.get("performed") is not True:
@@ -110,6 +112,7 @@ def describe(value, depth=0):
               "container": "容器镜像", "versions": "软件版本", "image": "镜像",
               "topology": "部署拓扑", "commands": "执行命令", "environment_variables": "环境变量",
               "core_config": "核心配置", "tool": "工具", "workload": "工作负载",
+              "script_refs": "归档脚本引用", "execution_match": "与运行时脚本的一致性",
               "requested": "请求配置", "observed_status": "实际观测状态", "scope": "证据适用范围",
               "events": "运行事件", "evidence_refs": "证据引用", "run_refs": "关联验证轮次",
               "fallback_to": "回退路径", "reason": "日志原因", "impact": "影响与限制",
