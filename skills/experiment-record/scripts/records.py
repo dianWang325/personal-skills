@@ -16,7 +16,13 @@ def template():
         "environment": {"machines": [], "container": {"image": None, "digest": None},
                         "versions": {k: None for k in ["vllm", "vllm_ascend", "triton", "cann", "torch", "torch_npu", "python"]}},
         "deployment": {"topology": None, "commands": [], "environment_variables": {}, "core_config": {}},
-        "benchmark": {"tool": None, "commands": [], "workload": {}, "warmup": None, "runs": []},
+        "benchmark": {"performed": None, "details_status": "unknown", "tool": None, "commands": [],
+                      "workload": {}, "warmup": None, "runs": [], "artifact_refs": []},
+        "accuracy": {"performed": None, "details_status": "unknown", "tool": None, "commands": [],
+                     "datasets": [], "evaluation_config": {}, "runs": [], "artifact_refs": []},
+        "tests": {"performed": None, "details_status": "unknown", "tool": None, "commands": [],
+                  "test_type": None, "selection": [], "case_matrix": [], "criteria": {},
+                  "runs": [], "artifact_refs": []},
         "outcome": {"summary": None, "conclusions": [], "limitations": []},
         "pitfalls": [], "evidence": [], "artifacts": [], "missing_information": [],
         "related_records": [], "tags": []}
@@ -42,6 +48,26 @@ def validate(data):
     for key in ("evidence", "artifacts", "missing_information", "pitfalls", "related_records", "tags"):
         if not isinstance(data.get(key), list):
             raise ValueError(f"{key} must be an array")
+    for key in ("benchmark", "accuracy", "tests"):
+        if key not in data:  # Older schema-v1 records remain readable.
+            continue
+        section = data[key]
+        if not isinstance(section, dict):
+            raise ValueError(f"{key} must be an object")
+        if section.get("performed") is not None and type(section["performed"]) is not bool:
+            raise ValueError(f"{key}.performed must be true, false or null")
+        state = section.get("details_status")
+        if state is not None and state not in {"complete", "partial", "unknown", "not_applicable"}:
+            raise ValueError(f"invalid {key}.details_status")
+        for field in ("commands", "runs", "artifact_refs"):
+            if field in section and not isinstance(section[field], list):
+                raise ValueError(f"{key}.{field} must be an array")
+        if state in {"complete", "partial"} and section.get("performed") is not True:
+            raise ValueError(f"{key}: complete/partial requires performed=true")
+        if state == "not_applicable" and section.get("performed") is not False:
+            raise ValueError(f"{key}: not_applicable requires performed=false")
+        if state == "complete" and any(not section.get(field) for field in ("commands", "runs", "artifact_refs")):
+            raise ValueError(f"{key}: complete requires commands, runs and artifact_refs")
     for key in ("started_at", "ended_at"):
         value = data["execution"].get(key)
         if value is not None:
@@ -105,10 +131,13 @@ def render(data):
     parts = [f"# {title}\n", f"实验 ID：{data['id']}\n\n状态：{data['status']}\n"]
     sections = [("execution", "执行时间"), ("purpose", "实验目的"), ("model", "模型"),
                 ("environment", "机器与软件环境"), ("deployment", "部署与核心配置"),
-                ("benchmark", "压测结果"), ("outcome", "结果与结论"), ("pitfalls", "遇到的问题"),
+                ("benchmark", "压测细节与结果"), ("accuracy", "精度评测细节与结果"),
+                ("tests", "测试细节与结果"), ("outcome", "结果与结论"), ("pitfalls", "遇到的问题"),
                 ("evidence", "事实依据"), ("artifacts", "日志与附件"),
                 ("missing_information", "缺失信息与冲突"), ("related_records", "关联实验"), ("tags", "标签")]
     for key, label in sections:
+        if key in {"accuracy", "tests"} and key not in data:
+            continue
         parts.extend([f"\n## {label}\n", describe(data.get(key))])
     return "\n".join(parts)
 
