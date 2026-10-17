@@ -4,7 +4,7 @@
 
 ## 已有 skill
 
-- [experiment-record](skills/experiment-record/SKILL.md)：从日志归档实验、检索历史、按时间复盘。
+- [experiment-record](skills/experiment-record/SKILL.md)：从日志归档实验、检索历史、按时间复盘。参见[使用说明书](skills/experiment-record/README.md)。
 
 ## 安装 / 更新
 
