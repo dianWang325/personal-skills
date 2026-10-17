@@ -16,6 +16,7 @@ def template():
         "environment": {"machines": [], "container": {"image": None, "digest": None},
                         "versions": {k: None for k in ["vllm", "vllm_ascend", "triton", "cann", "torch", "torch_npu", "python", "aisbench", "aisbench_auto_tools_prefix"]}},
         "deployment": {"topology": None, "commands": [], "environment_variables": {}, "core_config": {}},
+        "runtime_features": [],
         "benchmark": {"performed": None, "details_status": "unknown", "tool": None, "commands": [],
                       "workload": {}, "warmup": None, "runs": [], "artifact_refs": []},
         "accuracy": {"performed": None, "details_status": "unknown", "tool": None, "commands": [],
@@ -48,6 +49,19 @@ def validate(data):
     for key in ("evidence", "artifacts", "missing_information", "pitfalls", "related_records", "tags"):
         if not isinstance(data.get(key), list):
             raise ValueError(f"{key} must be an array")
+    features = data.get("runtime_features", [])
+    if not isinstance(features, list):
+        raise ValueError("runtime_features must be an array")
+    for feature in features:
+        if not isinstance(feature, dict) or not isinstance(feature.get("name"), str) or not feature["name"].strip():
+            raise ValueError("each runtime feature requires a name")
+        if feature.get("observed_status") not in {"enabled", "disabled", "fallback", "mixed", "unknown"}:
+            raise ValueError("invalid runtime feature observed_status")
+        for field in ("events", "evidence_refs", "run_refs"):
+            if not isinstance(feature.get(field), list):
+                raise ValueError(f"runtime feature {field} must be an array")
+        if feature["observed_status"] != "unknown" and not feature["evidence_refs"]:
+            raise ValueError("observed runtime feature state requires evidence_refs")
     for key in ("benchmark", "accuracy", "tests"):
         if key not in data:  # Older schema-v1 records remain readable.
             continue
@@ -96,6 +110,9 @@ def describe(value, depth=0):
               "container": "容器镜像", "versions": "软件版本", "image": "镜像",
               "topology": "部署拓扑", "commands": "执行命令", "environment_variables": "环境变量",
               "core_config": "核心配置", "tool": "工具", "workload": "工作负载",
+              "requested": "请求配置", "observed_status": "实际观测状态", "scope": "证据适用范围",
+              "events": "运行事件", "evidence_refs": "证据引用", "run_refs": "关联验证轮次",
+              "fallback_to": "回退路径", "reason": "日志原因", "impact": "影响与限制",
               "warmup": "预热", "runs": "各轮结果", "summary": "结果摘要",
               "conclusions": "结论", "limitations": "限制", "source": "来源", "field": "字段"}
     indent = "  " * depth
@@ -131,12 +148,13 @@ def render(data):
     parts = [f"# {title}\n", f"实验 ID：{data['id']}\n\n状态：{data['status']}\n"]
     sections = [("execution", "执行时间"), ("purpose", "实验目的"), ("model", "模型"),
                 ("environment", "机器与软件环境"), ("deployment", "部署与核心配置"),
+                ("runtime_features", "特性实际生效与回退"),
                 ("benchmark", "压测细节与结果"), ("accuracy", "精度评测细节与结果"),
                 ("tests", "测试细节与结果"), ("outcome", "结果与结论"), ("pitfalls", "遇到的问题"),
                 ("evidence", "事实依据"), ("artifacts", "日志与附件"),
                 ("missing_information", "缺失信息与冲突"), ("related_records", "关联实验"), ("tags", "标签")]
     for key, label in sections:
-        if key in {"accuracy", "tests"} and key not in data:
+        if key in {"accuracy", "tests", "runtime_features"} and key not in data:
             continue
         parts.extend([f"\n## {label}\n", describe(data.get(key))])
     return "\n".join(parts)
@@ -171,13 +189,14 @@ def cell(value):
 def rebuild(root):
     records = load_records(root)  # Validate all before changing generated files.
     lines = ["# 实验索引\n", "由 experiment-record 自动生成。执行时间未知的实验单列为未知，不使用归档时间替代。\n",
-             "| 执行时间 | 时区 | 实验 | 模型 | 状态 | 结果 |", "|---|---|---|---|---|---|"]
+             "| 执行时间 | 时区 | 实验 | 模型 | 状态 | 特性实际状态 | 结果 |", "|---|---|---|---|---|---|---|"]
     for path, data in sorted(records, key=lambda item: (item[1]["execution"].get("started_at") or "", item[1]["id"]), reverse=True):
         write(path.parent / "README.md", render(data))
         relative = quote((path.parent / "README.md").relative_to(root).as_posix(), safe="/")
+        feature_summary = "; ".join(f"{item['name']}: {item['observed_status']}" for item in data.get("runtime_features", [])) or "未知 / 未记录"
         values = [cell(data["execution"].get("started_at")), cell(data["execution"].get("timezone")),
                   f"[{cell(data['title'])}]({relative})", cell(data["model"].get("name")),
-                  cell(data["status"]), cell(data["outcome"].get("summary"))]
+                  cell(data["status"]), cell(feature_summary), cell(data["outcome"].get("summary"))]
         lines.append("| " + " | ".join(values) + " |")
     write(root / "INDEX.md", "\n".join(lines) + "\n")
     return len(records)
