@@ -25,6 +25,8 @@ benchmark / accuracy / tests 对象各自包含：
 
 ## 压测 benchmark
 
+必须遵循 [完整日志和配置绑定约定](benchmark-traceability.md)：原始压测日志全文本地归档，每轮以 run_id/service_instance/service_config_refs/benchmark_config_refs/log_refs/log_completeness 绑定服务、压测配置及原始日志。大文件外部引用例外不适用于压测日志，日志不完整必须如实标记。
+
 保存 workload：数据集名称/版本、筛选/抽样规则、请求数、实际成功/失败请求数、输入/输出 token 长度或分布、并发、请求率/QPS（含无限请求率）、seed、流式配置、超时/重试；保存 warmup、轮数和持续时间。
 
 每轮完整保留工具提供的指标表，包括请求吞吐、输出/总 token 吞吐、TTFT、TPOT、ITL、端到端时延及各分位数、错误计数。每项明确 name、value、unit、statistic、scope，保留原口径，不把 ms 转成秒后丢失说明，不把总 token 吞吐当输出吞吐。工具未输出的指标标为缺失，不补造。

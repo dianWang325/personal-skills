@@ -45,6 +45,8 @@
 | 结果 | 结果摘要、证据支持的结论、适用范围与限制 |
 | 可选内容 | 实验目的、踩坑现象、处理过程、验证结果 |
 | 可追溯信息 | 日志来源、关键片段或行号、附件路径/哈希、缺失项、关联实验、标签 |
+| 修订与排查 | 修订前后结论、原因和证据；每次成功/失败/无效尝试、排除项与未决问题 |
+| 经验与反馈 | 有适用条件和反例的经验，后续复用时的有效/失效/受限/未决反馈，绑定经验内容版本 |
 
 完整字段约定见 [record-format.md](references/record-format.md)。版本未知时留空；没有压测结果时不填零。根因猜测与已验证结论分开保存。
 
@@ -67,6 +69,12 @@
 将可获得的原始配置、汇总报告和日志保存到实验 `evidence/`，记录路径与 SHA256。大体积逐请求/逐样本输出可外部引用，但本次实验的详细汇总结果要落在实验目录。只有部分材料时照常归档，列出缺失项，并将 `details_status` 标为 `partial`；运行是否通过和记录是否完整分别表示。不会为了补齐材料自动重跑。
 
 使用 AISBench 或 `aisbench_auto_tools_prefix` 时，也请提供当时实际使用的各自版本号/commit、dirty 状态、工具路径和评测所在机器/容器等已知信息。它们分别保存为 `environment.versions.aisbench` 与 `environment.versions.aisbench_auto_tools_prefix`，不以服务端版本替代客户端版本。没有版本元数据的脚本可用内容 SHA256 标识；仅有目录名不足以确认版本。缺失信息会单列，不会猜测，多轮版本变化也会分别记录。
+
+### 完整压测日志与逐轮配置对应
+
+原始压测日志必须全文保存在实验 evidence/，保留原始输出、换行及已有格式，便于以后打开截图；摘要、截取的尾部、截图和远端路径都不能替代完整日志。stdout/stderr 分离或存在轮转分片时分别保留。仅有部分日志或远端文件仍在写入时，会标 partial/unknown 并说明缺失，不能称为完整归档。
+
+每轮压测以稳定 run_id 绑定服务实例、service_config_refs（实际服务配置）、benchmark_config_refs（本轮负载配置）、log_refs（完整原始日志）和 log_completeness。摘要自动生成“服务配置 → 压测配置 → 压测日志”文件链接表，按轮次直接打开，不靠文件名猜对应关系。共用日志需要标清各轮范围。详见 [压测日志与配置追溯](references/benchmark-traceability.md)。
 
 ## 文件在哪里
 
@@ -91,6 +99,8 @@ D:\experiment\
 
 ## 补充、检索与复盘
 
+现有 record.json 新增 attempts、lessons、reuse_feedback、retrieval、revision_history 五组字段；摘要和索引一起展示，不新建更深的实验/知识目录。旧记录继续可读，不补造历史。
+
 补充已有记录：
 
 ```text
@@ -98,11 +108,15 @@ D:\experiment\
 这是当时的镜像 digest 和 vllm-ascend commit，请更新已有记录，保留证据来源。
 ```
 
+Codex 会用 update 保存修订原因及前后内容，不抹去旧判断。失败/无效的排查同样保留；已有排查、经验和反馈条目只追加，更正时用 supersedes 指向旧条目。经验需要适用模型、版本、硬件、配置/负载、特性实际状态等条件，未知条件不代表通用。复用反馈指向确切经验内容哈希，避免后来改写结论后旧反馈错配。
+
 检索历史：
 
 ```text
 用 $experiment-record 找出 Qwen 在 TP8 配置下做过的实验，列出环境、吞吐、TTFT 和记录链接。
 ```
+
+也可以说“查找 CPP 回退的实验，列出失败尝试及后续纠正”。search 按当前 JSON 做忽略大小写的多词 AND 检索，支持模型、标签、状态、特性和日期筛选，返回命中字段与片段；不扫描原始日志、不做语义搜索。--include-history 可查被修订的旧内容。命中材料后仍需核对状态、适用条件和原始证据。
 
 阶段复盘：
 
@@ -113,6 +127,8 @@ D:\experiment\
 ```
 
 复盘会链接原始记录。模型、硬件、版本、输入/输出长度、负载、精度、预热或指标口径不同，都会影响可比性；单次测量不会被描述为已证明的稳定提升。执行时间未知的实验无法可靠归入时间区间，会单独提示。
+
+复盘还会汇总哪些旧结论被纠正、哪些失败路线已排除、哪些经验被再次支持或在其他条件下失效。详见 [修订、排查与复用约定](references/experience-and-history.md)。
 
 不会自动设置定期任务。希望每周或每月复盘时，另行明确要求创建自动化。
 
@@ -129,16 +145,30 @@ python $recordScript template --output 'D:\experiment\draft.json'
 # 填写 draft.json 后归档；title 必填，其他字段遵循骨架类型。
 python $recordScript --root 'D:\experiment' add --input 'D:\experiment\draft.json'
 
-# 修改已归档 record.json 后，重新生成所有实验摘要和总索引。
+# 从当前 record.json 复制一份到临时文件，填写修改后，保留原 revision_history。
+python $recordScript --root 'D:\experiment' update --record '<实验ID>' --input '<修改后的完整JSON>' --reason '补充证据或修正原因'
+
+# 仅重建阅读视图（不能替代 update 保存修订历史）。
 python $recordScript --root 'D:\experiment' rebuild
 
 # 按执行开始日期筛选，包含首尾两日；同时返回时间未知的记录。
 python $recordScript --root 'D:\experiment' list --from 2026-10-01 --to 2026-10-31
+
+# 按问题检索，支持 --model、--tag、--status、--feature 和日期过滤。
+python $recordScript --root 'D:\experiment' search --query 'CPP 回退'
+
+# 只读核验附件存在性、SHA256、配置/脚本/日志引用、历史及反馈归属。
+python $recordScript --root 'D:\experiment' verify
+
+# 为复用反馈获取来源经验的准确内容哈希。
+python $recordScript --root 'D:\experiment' lesson-digest --record '<来源实验ID>' --lesson '<经验ID>'
 ```
 
 `add` 归档填好的 JSON 并生成摘要和索引；日志解读、证据复制、语义去重以及复盘由 Codex 完成。脚本不会自动解析原始日志或采集环境。草稿不属于实验记录，归档完成后可自行移走。
 
 `record.json` 是事实来源。不要直接修改生成的实验 `README.md` 或 `INDEX.md`，否则 `rebuild` 会覆盖这些修改；补充说明应写入对应 JSON 字段。
+
+verify 退出码：0=passed，1=failed，2=incomplete（如外部附件未校验、缺哈希、缺配置—日志对应关系或未确认完整日志）。校验只证明本地档案结构和材料的一致性，不证明实验成功或经验结论正确；不会改写文件或自动重置哈希。补充/修正记录请使用 update。
 
 ## 自动读取远端文件
 
@@ -148,6 +178,6 @@ python $recordScript --root 'D:\experiment' list --from 2026-10-01 --to 2026-10-
 
 ## 日志与数据保存
 
-日志默认保留原样副本或注明来源的原文摘录，不主动脱敏。大文件可以只记录外部路径和 SHA256，此时文件尚未复制到实验仓库，仍需单独保存或备份。明确的认证凭据如确有必要保留，只放本地不受 Git 跟踪的原始附件，摘要和结构化记录不复制凭据值。
+日志默认保留原样副本或注明来源的原文摘录，不主动脱敏。压测原始日志必须全文本地保存；其他大文件可以只记录外部路径和 SHA256，此时文件尚未复制到实验仓库，仍需单独保存或备份。明确的认证凭据如确有必要保留，只放本地不受 Git 跟踪的原始附件，摘要和结构化记录不复制凭据值。
 
 个人 skills GitHub 仓库保存可复用 skill 代码和本说明书；本地实验仓库保存真实实验数据。归档允许自动只读访问相关远端文件和查询版本证据；不会自动 Git 提交、推送或执行实验。

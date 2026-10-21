@@ -1,4 +1,4 @@
 interface:
   display_name: "实验记录与复盘"
-  short_description: "从日志整理环境、部署配置和压测结果，建立可追溯实验档案并复盘"
+  short_description: "归档实验与完整压测日志，绑定配置并保留修订排查、经验反馈，支持检索校验及复盘"
   default_prompt: "使用 $experiment-record 根据我提供的日志和环境信息记录此次实验，并更新 D:\\experiment 的实验索引。"

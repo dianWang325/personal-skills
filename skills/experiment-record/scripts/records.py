@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 import re
 from urllib.parse import quote
+from archive_tools import (digest, history_problems, revised_record, search_records,
+                           validate_extensions, verify_archive)
 
 
 def template():
@@ -25,6 +27,8 @@ def template():
                   "test_type": None, "selection": [], "case_matrix": [], "criteria": {},
                   "runs": [], "artifact_refs": [], "script_refs": []},
         "outcome": {"summary": None, "conclusions": [], "limitations": []},
+        "revision_history": [], "attempts": [], "lessons": [], "reuse_feedback": [],
+        "retrieval": {"symptoms": [], "error_keywords": [], "features": [], "fixes": [], "keywords": []},
         "pitfalls": [], "evidence": [], "artifacts": [], "missing_information": [],
         "related_records": [], "tags": []}
 
@@ -37,6 +41,8 @@ def write(path, content):
 
 
 def validate(data):
+    if not isinstance(data, dict):
+        raise ValueError("record must be an object")
     if data.get("schema_version") != 1:
         raise ValueError("schema_version must be 1")
     if not isinstance(data.get("title"), str) or not data["title"].strip():
@@ -84,6 +90,21 @@ def validate(data):
             raise ValueError(f"{key}: not_applicable requires performed=false")
         if state == "complete" and any(not section.get(field) for field in ("commands", "runs", "artifact_refs")):
             raise ValueError(f"{key}: complete requires commands, runs and artifact_refs")
+        if key == "benchmark":
+            run_ids = set()
+            for run in section.get("runs", []):
+                if not isinstance(run, dict):
+                    raise ValueError("benchmark runs must be objects")
+                run_id = run.get("run_id")
+                if run_id is not None:
+                    if not isinstance(run_id, str) or not run_id.strip() or run_id in run_ids:
+                        raise ValueError("benchmark run_id must be non-empty and unique")
+                    run_ids.add(run_id)
+                for field in ("service_config_refs", "benchmark_config_refs", "log_refs"):
+                    if field in run and (not isinstance(run[field], list) or any(not isinstance(x, str) for x in run[field])):
+                        raise ValueError(f"benchmark run {field} must be an array of paths")
+                if "log_completeness" in run and run["log_completeness"] not in {"complete", "partial", "unknown"}:
+                    raise ValueError("invalid benchmark log_completeness")
     for key in ("started_at", "ended_at"):
         value = data["execution"].get(key)
         if value is not None:
@@ -93,6 +114,7 @@ def validate(data):
     start, end = (data["execution"].get(k) for k in ("started_at", "ended_at"))
     if start and end and end < start:
         raise ValueError("ended_at precedes started_at")
+    validate_extensions(data)
 
 
 def render_value(value):
@@ -118,6 +140,13 @@ def describe(value, depth=0):
               "fallback_to": "回退路径", "reason": "日志原因", "impact": "影响与限制",
               "warmup": "预热", "runs": "各轮结果", "summary": "结果摘要",
               "conclusions": "结论", "limitations": "限制", "source": "来源", "field": "字段"}
+    labels.update({"claim": "经验结论", "conditions": "适用条件", "counterexamples": "反例",
+                   "assessment": "假设评估", "hypothesis": "假设", "action": "尝试措施",
+                   "result": "观测结果", "supersedes": "修正或替代的条目", "lesson_ref": "经验及版本引用",
+                   "outcome": "复用效果", "deviations": "与适用条件的差异", "reason": "原因",
+                   "before": "修订前", "after": "修订后", "recorded_at": "记录时间",
+                   "changes": "变更明细", "symptoms": "现象", "error_keywords": "错误关键词",
+                   "features": "相关特性", "fixes": "处理办法", "keywords": "检索词"})
     indent = "  " * depth
     if isinstance(value, dict):
         if not value:
@@ -154,26 +183,51 @@ def render(data):
                 ("runtime_features", "特性实际生效与回退"),
                 ("benchmark", "压测细节与结果"), ("accuracy", "精度评测细节与结果"),
                 ("tests", "测试细节与结果"), ("outcome", "结果与结论"), ("pitfalls", "遇到的问题"),
+                ("attempts", "排查尝试与排除项"), ("lessons", "经验与适用条件"),
+                ("reuse_feedback", "经验复用反馈"), ("revision_history", "结论与记录修订历史"),
+                ("retrieval", "问题检索信息"),
                 ("evidence", "事实依据"), ("artifacts", "日志与附件"),
                 ("missing_information", "缺失信息与冲突"), ("related_records", "关联实验"), ("tags", "标签")]
     for key, label in sections:
-        if key in {"accuracy", "tests", "runtime_features"} and key not in data:
+        if key in {"accuracy", "tests", "runtime_features", "attempts", "lessons", "reuse_feedback", "revision_history", "retrieval"} and key not in data:
             continue
         parts.extend([f"\n## {label}\n", describe(data.get(key))])
+        if key == "benchmark" and data.get("benchmark", {}).get("runs"):
+            parts.extend(["\n### 服务配置 → 压测配置 → 压测日志\n",
+                          "| 压测轮次 | 服务实例 | 服务配置 | 压测配置 | 原始日志 | 日志完整度 |",
+                          "|---|---|---|---|---|---|"])
+            for number, run in enumerate(data["benchmark"]["runs"], 1):
+                if not isinstance(run, dict):
+                    continue
+                def links(field):
+                    refs = run.get(field, [])
+                    if not isinstance(refs, list):
+                        return "缺失"
+                    return "<br>".join(f"[{cell(ref)}]({quote(ref, safe='/')})" for ref in refs if isinstance(ref, str)) or "缺失"
+                instance = run.get("service_instance")
+                instance_text = json.dumps(instance, ensure_ascii=False) if isinstance(instance, dict) else instance
+                values = [cell(run.get("run_id", run.get("id", f"第{number}轮"))), cell(instance_text),
+                          links("service_config_refs"), links("benchmark_config_refs"), links("log_refs"),
+                          cell(run.get("log_completeness", "unknown"))]
+                parts.append("| " + " | ".join(values) + " |")
     return "\n".join(parts)
 
 
 def load_records(root):
     records = []
-    # Read the former layout too, without silently moving existing archives.
-    paths = set(root.glob("*/record.json")) | set((root / "experiments").glob("*/*/*/record.json"))
-    for path in sorted(paths):
+    for path in record_paths(root):
         data = json.loads(path.read_text(encoding="utf-8-sig"))
         validate(data)
         if data.get("id") != path.parent.name:
             raise ValueError(f"id does not match directory: {path}")
         records.append((path, data))
     return records
+
+
+def record_paths(root):
+    # Read the former layout too, without silently moving existing archives.
+    paths = set(root.glob("*/record.json")) | set((root / "experiments").glob("*/*/*/record.json"))
+    return sorted(paths)
 
 
 def model_directory_name(data, override=None):
@@ -192,14 +246,18 @@ def cell(value):
 def rebuild(root):
     records = load_records(root)  # Validate all before changing generated files.
     lines = ["# 实验索引\n", "由 experiment-record 自动生成。执行时间未知的实验单列为未知，不使用归档时间替代。\n",
-             "| 执行时间 | 时区 | 实验 | 模型 | 状态 | 特性实际状态 | 结果 |", "|---|---|---|---|---|---|---|"]
+             "| 执行时间 | 时区 | 实验 | 模型 | 状态 | 特性实际状态 | 结果 | 检索词 | 经验/修订 |", "|---|---|---|---|---|---|---|---|---|"]
     for path, data in sorted(records, key=lambda item: (item[1]["execution"].get("started_at") or "", item[1]["id"]), reverse=True):
         write(path.parent / "README.md", render(data))
         relative = quote((path.parent / "README.md").relative_to(root).as_posix(), safe="/")
         feature_summary = "; ".join(f"{item['name']}: {item['observed_status']}" for item in data.get("runtime_features", [])) or "未知 / 未记录"
+        retrieval = data.get("retrieval", {})
+        terms = list(dict.fromkeys(str(x) for values in retrieval.values() if isinstance(values, list) for x in values))
         values = [cell(data["execution"].get("started_at")), cell(data["execution"].get("timezone")),
                   f"[{cell(data['title'])}]({relative})", cell(data["model"].get("name")),
-                  cell(data["status"]), cell(feature_summary), cell(data["outcome"].get("summary"))]
+                  cell(data["status"]), cell(feature_summary), cell(data["outcome"].get("summary")),
+                  cell("; ".join(terms[:12]) or "未记录"),
+                  f"{len(data.get('lessons', []))}/{len(data.get('revision_history', []))}"]
         lines.append("| " + " | ".join(values) + " |")
     write(root / "INDEX.md", "\n".join(lines) + "\n")
     return len(records)
@@ -214,6 +272,24 @@ def main():
     p = sub.add_parser("add")
     p.add_argument("--input", type=Path, required=True)
     p.add_argument("--model-name", "--slug", dest="model_name", help="Optional short model name for the folder")
+    p = sub.add_parser("update", help="Update a record with preserved history")
+    p.add_argument("--record", required=True)
+    p.add_argument("--input", type=Path, required=True)
+    p.add_argument("--reason", required=True)
+    p = sub.add_parser("verify", help="Read-only attachment, reference and history verification")
+    p.add_argument("--record")
+    p = sub.add_parser("search", help="Case-insensitive literal AND search of structured records")
+    p.add_argument("--query", default="")
+    p.add_argument("--model")
+    p.add_argument("--tag")
+    p.add_argument("--status", choices=["unknown", "success", "failed", "interrupted", "partial"])
+    p.add_argument("--feature")
+    p.add_argument("--from", dest="start")
+    p.add_argument("--to", dest="end")
+    p.add_argument("--include-history", action="store_true")
+    p = sub.add_parser("lesson-digest", help="Get the content hash for a feedback lesson reference")
+    p.add_argument("--record", required=True)
+    p.add_argument("--lesson", required=True)
     sub.add_parser("rebuild")
     p = sub.add_parser("list")
     p.add_argument("--from", dest="start")
@@ -227,6 +303,8 @@ def main():
     elif args.command == "add":
         data = json.loads(args.input.read_text(encoding="utf-8-sig"))
         validate(data)
+        if data.get("revision_history"):
+            raise ValueError("new records must start with empty revision_history")
         load_records(root)
         now = datetime.now().astimezone()
         started = data["execution"].get("started_at")
@@ -248,6 +326,31 @@ def main():
         (folder / "evidence").mkdir()
         rebuild(root)
         print(folder)
+    elif args.command == "update":
+        records = load_records(root)
+        found = next(((p, d) for p, d in records if d["id"] == args.record), None)
+        if found is None:
+            raise ValueError("record not found")
+        path, old = found
+        if history_problems(old):
+            raise ValueError("existing revision history is inconsistent; inspect with verify before updating")
+        new = json.loads(args.input.read_text(encoding="utf-8-sig"))
+        validate(new)
+        revised = revised_record(old, new, args.reason)
+        validate(revised)
+        write(path, json.dumps(revised, ensure_ascii=False, indent=2) + "\n")
+        rebuild(root)
+        print(path)
+    elif args.command == "verify":
+        report = verify_archive(root, record_paths(root), validate, args.record)
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 1 if report["errors"] else 2 if report["warnings"] else 0
+    elif args.command == "lesson-digest":
+        record = next((d for _, d in load_records(root) if d["id"] == args.record), None)
+        lesson = next((x for x in record.get("lessons", []) if x["id"] == args.lesson), None) if record else None
+        if lesson is None:
+            raise ValueError("lesson not found")
+        print(json.dumps({"record_id": args.record, "lesson_id": args.lesson, "lesson_sha256": digest(lesson)}))
     elif args.command == "rebuild":
         print(f"Indexed {rebuild(root)} experiments")
     else:
@@ -256,6 +359,11 @@ def main():
                 datetime.strptime(value, "%Y-%m-%d")
         if args.start and args.end and args.start > args.end:
             raise ValueError("--from must precede --to")
+        if args.command == "search":
+            result = search_records(load_records(root), args.query, args.model, args.tag, args.status,
+                                    args.feature, args.start, args.end, args.include_history)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
         selected, unknown = [], []
         for path, data in load_records(root):
             date = data["execution"].get("started_at")
@@ -268,4 +376,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
